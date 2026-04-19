@@ -1,6 +1,6 @@
 "use client";
 
-const GRASS_PILL = "enough of this. let\u2019s touch grass";
+const GRASS_PILL = "Enough AI talk, let\u2019s touch grass.";
 
 interface FollowUpPillsProps {
   prompts: string[];

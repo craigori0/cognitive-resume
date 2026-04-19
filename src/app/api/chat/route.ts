@@ -32,6 +32,36 @@ export async function POST(req: NextRequest) {
     // Retrieve relevant context
     const retrieval = await retrieve(message);
 
+    // Breadth-table mode: the client will render an interactive project
+    // table from structured JSON. Tell Claude to write only short prose
+    // (intro + takeaway) and NOT to emit a markdown table of its own.
+    const hasBreadthTable =
+      !grassMode && retrieval.breadthProjects.length > 0;
+
+    const breadthPreview = hasBreadthTable
+      ? retrieval.breadthProjects
+          .slice(0, 10)
+          .map(
+            (p) =>
+              `- ${p.client} (${p.year}) — ${p.industry} — ${p.projectType} — ${p.tier || "Context"}`
+          )
+          .join("\n")
+      : "";
+
+    const breadthInstruction = hasBreadthTable
+      ? `
+
+IMPORTANT — TABLE RENDERING:
+The client UI will render an interactive, filterable, tier-sorted project table directly from the ${retrieval.breadthProjects.length} rows below. Do NOT write a markdown table. Do NOT list the projects row-by-row.
+Your job is to write ONLY:
+1. A 1-2 sentence first-person intro framing what the user is about to see (e.g. "Here's the full view of my healthcare work — hospital systems, pharma, insurance, and imaging.").
+2. A 1-2 sentence closing takeaway highlighting a pattern, a hero case, or what to dig into next.
+Keep the total response under 80 words. Do not emit any pipe characters ("|") or markdown table syntax.
+
+Preview of the rows the UI will render (pre-sorted Hero → Detail → Context, newest first):
+${breadthPreview}${retrieval.breadthProjects.length > 10 ? `\n…and ${retrieval.breadthProjects.length - 10} more.` : ""}`
+      : "";
+
     // Build the user message with context
     const userMessage = `The user asked: "${message}"
 
@@ -41,7 +71,7 @@ Here is the relevant context retrieved from Craig's knowledge base:
 ${retrieval.contextText}
 </retrieved_context>
 
-Respond to the user's question using the retrieved context. Follow the system prompt guidelines for voice, reasoning, and guardrails. If a curated response is included, use it as the primary basis for your answer while making it feel natural and conversational.`;
+Respond to the user's question using the retrieved context. Follow the system prompt guidelines for voice, reasoning, and guardrails. If a curated response is included, use it as the primary basis for your answer while making it feel natural and conversational.${breadthInstruction}`;
 
     // Build conversation messages — keep clean user messages in history
     const messages: Message[] = [
@@ -49,10 +79,13 @@ Respond to the user's question using the retrieved context. Follow the system pr
       { role: "user", content: userMessage },
     ];
 
-    // Stream response from Claude
+    // Stream response from Claude. max_tokens is bumped so that breadth /
+    // table answers (e.g. "all my healthcare projects") don't get truncated
+    // mid-row. Grass mode stays modest since answers are 50-150 words.
+    const maxTokens = grassMode ? 500 : 1500;
     const stream = await getAnthropic().messages.stream({
       model: "claude-opus-4-6",
-      max_tokens: 600,
+      max_tokens: maxTokens,
       system: grassMode
         ? `${SYSTEM_PROMPT}\n\n${GRASS_MODE_PROMPT}`
         : SYSTEM_PROMPT,
@@ -74,6 +107,19 @@ Respond to the user's question using the retrieved context. Follow the system pr
               );
             }
           }
+
+          // After Claude's prose, append the structured project table
+          // payload if this was a breadth query. The client pulls the
+          // JSON out of the buffered text and renders a <ProjectTable />.
+          if (hasBreadthTable) {
+            const tableBlock = `\n\n<project_table>${JSON.stringify(
+              retrieval.breadthProjects
+            )}</project_table>`;
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ text: tableBlock })}\n\n`)
+            );
+          }
+
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (err) {

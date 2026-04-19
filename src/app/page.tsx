@@ -11,9 +11,9 @@ import GrassOverlay from "@/components/GrassOverlay";
 import { MailIcon } from "@/components/Icons";
 import { parseSSEStream } from "@/lib/sse";
 import { CURATED_FOLLOWUPS } from "@/lib/constants";
-import type { Message } from "@/lib/types";
+import type { Message, ProjectRow } from "@/lib/types";
 
-const GRASS_PILL = "enough of this. let\u2019s touch grass";
+const GRASS_PILL = "Enough AI talk, let\u2019s touch grass.";
 const GRASS_TURN_THRESHOLD = 4; // show after this many user messages
 
 function getCuratedFollowups(query: string): string[] | null {
@@ -101,6 +101,24 @@ export default function ChatPage() {
         fullText = fullText.replace(followupsMatch[0], "").trimEnd();
       }
 
+      // Strip <project_table> tag from visible text; parse the JSON so
+      // MessageBubble can render an interactive table below the prose.
+      let projectRows: ProjectRow[] | undefined;
+      const tableMatch = fullText.match(
+        /<project_table>\s*([\s\S]*?)\s*<\/project_table>/
+      );
+      if (tableMatch) {
+        fullText = fullText.replace(tableMatch[0], "").trimEnd();
+        try {
+          const parsed = JSON.parse(tableMatch[1]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            projectRows = parsed as ProjectRow[];
+          }
+        } catch {
+          // Malformed payload — silently fall back to prose only.
+        }
+      }
+
       // Use curated followups for the opening funnel, otherwise
       // fall back to Claude's contextual <followups>.
       let newFollowups: string[] = [];
@@ -129,7 +147,10 @@ export default function ChatPage() {
 
       // Phase 2: Add the message bubble and animate the text in.
       // Thinking indicator stays visible until we start revealing.
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "", projectRows },
+      ]);
       setIsThinking(false);
 
       // Reveal characters at a fixed rate via requestAnimationFrame.
@@ -149,9 +170,11 @@ export default function ChatPage() {
 
           setMessages((prev) => {
             const updated = [...prev];
+            const prior = updated[updated.length - 1];
             updated[updated.length - 1] = {
               role: "assistant",
               content: fullText.slice(0, displayed),
+              projectRows: prior?.projectRows,
             };
             return updated;
           });
@@ -165,7 +188,7 @@ export default function ChatPage() {
         revealRafRef.current = requestAnimationFrame(tick);
       });
 
-      if (!fullText.trim()) {
+      if (!fullText.trim() && !projectRows) {
         setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -301,6 +324,7 @@ function ConversationLayout({
               key={i}
               role={msg.role}
               content={msg.content}
+              projectRows={msg.projectRows}
               isStreaming={
                 isStreaming &&
                 i === messages.length - 1 &&

@@ -2,15 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ArrowUpIcon } from "./Icons";
 import { parseSSEStream } from "@/lib/sse";
 import type { Message } from "@/lib/types";
 
 const GRASS_PROMPTS = [
-  "What do you do for fun?",
-  "Any good books lately?",
-  "Tell me something surprising",
-  "What's your hot take?",
+  "What are your top 5 albums?",
+  "Best cookies in NYC?",
+  "Most beautiful places you\u2019ve seen?",
 ];
 
 interface GrassOverlayProps {
@@ -311,6 +311,7 @@ function GrassBubble({
           className={`grass-prose ${isStreaming ? "grass-streaming-cursor" : ""}`}
         >
           <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
             components={{
               a: ({ href, children }) => (
                 <a
@@ -321,6 +322,11 @@ function GrassBubble({
                 >
                   {children}
                 </a>
+              ),
+              table: ({ children }) => (
+                <div className="grass-table-wrap">
+                  <table>{children}</table>
+                </div>
               ),
             }}
           >

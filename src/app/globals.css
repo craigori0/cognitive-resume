@@ -122,6 +122,171 @@ body {
 .message-prose strong { font-weight: 600; }
 .message-prose a { text-decoration: underline; text-underline-offset: 2px; }
 
+/* Tables inside assistant messages */
+.message-table-wrap {
+  overflow-x: auto;
+  margin: 0.75em 0;
+  border: 1px solid rgba(31, 27, 22, 0.10);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.message-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.message-table-wrap th,
+.message-table-wrap td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(31, 27, 22, 0.08);
+}
+.message-table-wrap th {
+  font-weight: 600;
+  color: rgba(31, 27, 22, 0.85);
+  background: rgba(31, 27, 22, 0.04);
+  white-space: nowrap;
+}
+.message-table-wrap tr:last-child td { border-bottom: none; }
+
+/* Interactive project table — used for breadth queries
+   ("show me all my healthcare projects") */
+.project-table {
+  margin-top: 12px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.project-table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.project-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(31, 27, 22, 0.65);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(31, 27, 22, 0.12);
+  cursor: pointer;
+  transition: all 120ms ease-out;
+}
+.project-chip:hover:not(:disabled) {
+  color: rgba(31, 27, 22, 0.9);
+  border-color: rgba(31, 27, 22, 0.25);
+}
+.project-chip-active {
+  background: #1f1b16;
+  color: #fff;
+  border-color: #1f1b16;
+}
+.project-chip-active:hover {
+  color: #fff;
+}
+.project-chip-count {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.project-chip-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.project-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(31, 27, 22, 0.10);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+.project-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.project-table-wrap th,
+.project-table-wrap td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(31, 27, 22, 0.08);
+}
+.project-table-wrap th {
+  font-weight: 600;
+  color: rgba(31, 27, 22, 0.85);
+  background: rgba(31, 27, 22, 0.04);
+  white-space: nowrap;
+}
+.project-table-wrap tr:last-child td { border-bottom: none; }
+
+.project-client {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 500;
+}
+.project-year { white-space: nowrap; color: rgba(31, 27, 22, 0.7); }
+.project-sector { color: rgba(31, 27, 22, 0.5); }
+.project-outcome {
+  color: rgba(31, 27, 22, 0.8);
+  min-width: 260px;
+}
+.project-empty {
+  text-align: center;
+  padding: 18px 12px;
+  color: rgba(31, 27, 22, 0.5);
+}
+
+.project-tier-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+.project-tier-hero {
+  background: rgba(229, 120, 60, 0.14);
+  color: rgb(166, 76, 26);
+}
+.project-tier-detail {
+  background: rgba(31, 27, 22, 0.08);
+  color: rgba(31, 27, 22, 0.75);
+}
+.project-tier-context {
+  background: rgba(31, 27, 22, 0.04);
+  color: rgba(31, 27, 22, 0.55);
+}
+
+.project-expand {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(31, 27, 22, 0.7);
+  background: transparent;
+  border: 1px dashed rgba(31, 27, 22, 0.18);
+  cursor: pointer;
+  transition: all 120ms ease-out;
+}
+.project-expand:hover {
+  color: rgba(31, 27, 22, 0.9);
+  border-color: rgba(31, 27, 22, 0.35);
+}
+.project-expand-collapse { opacity: 0.7; }
+
 /* Thinking indicator bars */
 @keyframes thinkingBar {
   0%, 100% { transform: scaleY(0.4); }
@@ -200,6 +365,35 @@ body {
 .grass-prose strong { font-weight: 600; color: white; }
 .grass-prose em { font-style: italic; color: rgba(255, 255, 255, 0.75); }
 .grass-prose a { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Tables inside grass-mode messages */
+.grass-table-wrap {
+  overflow-x: auto;
+  margin: 0.75em 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.grass-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+}
+.grass-table-wrap th,
+.grass-table-wrap td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.grass-table-wrap th {
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+.grass-table-wrap tr:last-child td { border-bottom: none; }
 
 /* Grass streaming cursor */
 .grass-streaming-cursor::after {

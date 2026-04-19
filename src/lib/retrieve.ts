@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { supabase } from "./supabase";
 import { EMBEDDING_MODEL, CURATED_TRIGGERS } from "./constants";
+import type { ProjectRow } from "./types";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -118,6 +119,223 @@ async function semanticSearch(
 }
 
 // ---------------------------------------------------------------------------
+// Breadth query detection — for "show me all my X experience" style questions,
+// pull every matching project row from the project_database instead of the
+// top-K semantic hits. This keeps tables complete instead of showing 2 of 9.
+// ---------------------------------------------------------------------------
+const BREADTH_PATTERNS = [
+  /\ball (of )?(your|my|craig'?s?) /i,
+  /\ball the /i,
+  /\bevery /i,
+  /\bfull (list|portfolio|set) /i,
+  /\bentire /i,
+  /\bshow me (all|every|your|the) /i,
+  /\blist (all|every|your|the|out) /i,
+  /\bevery (project|client|engagement|piece of work) /i,
+  /\bhow many (projects|clients|engagements) /i,
+  /\bwhat (projects|clients|work) have (you|i) /i,
+  /\b(all|full) experience in /i,
+  /\bcomplete (list|portfolio) /i,
+  /\bwalk me through (your|the|all) /i,
+];
+
+// Maps a user-query alias to a set of canonical industry and sector values
+// a project can live under. When the user says "healthcare", we want every
+// project whose industry OR sector signals healthcare work — that way rows
+// like Telehealth Toolbox (industry: Social Impact, sector: Digital Health)
+// still surface on a healthcare question.
+interface BreadthBucket {
+  industries?: string[];
+  sectors?: string[];
+}
+
+const INDUSTRY_BUCKETS: Record<string, BreadthBucket> = {
+  healthcare: {
+    industries: ["Healthcare"],
+    sectors: [
+      "Digital Health",
+      "Hospital System",
+      "Pharma",
+      "Medical Imaging",
+      "Consumer Health",
+    ],
+  },
+  "health care": { industries: ["Healthcare"] },
+  pharma: { sectors: ["Pharma"] },
+  "health tech": { sectors: ["Digital Health"] },
+  "digital health": { sectors: ["Digital Health"] },
+  "financial services": { industries: ["Financial Services"] },
+  finance: { industries: ["Financial Services"] },
+  fintech: { industries: ["Financial Services"] },
+  banking: { sectors: ["SMB Banking", "Consumer Banking", "Investment Banking", "Trade Finance"] },
+  insurance: {
+    industries: ["Insurance"],
+    sectors: ["Insurance"],
+  },
+  technology: { industries: ["Technology"] },
+  tech: { industries: ["Technology"] },
+  telecom: { industries: ["Telecommunications"] },
+  telecommunications: { industries: ["Telecommunications"] },
+  automotive: { industries: ["Automotive"] },
+  "consumer goods": { industries: ["Consumer Goods"] },
+  cpg: { industries: ["Consumer Goods"] },
+  "social impact": { industries: ["Social Impact"] },
+};
+
+// Longest aliases first so "financial services" wins over "finance".
+const INDUSTRY_ALIAS_KEYS = Object.keys(INDUSTRY_BUCKETS).sort(
+  (a, b) => b.length - a.length
+);
+
+const PROJECT_TYPE_ALIASES: Record<string, string> = {
+  "product strategy": "Product Strategy",
+  "experience strategy": "Experience Strategy",
+  "organizational design": "Organizational Design",
+  "org design": "Organizational Design",
+  "research strategy": "Research Strategy",
+};
+
+interface BreadthFilter {
+  industries?: string[]; // match any in metadata.industry
+  sectors?: string[]; // match any in metadata.sector
+  projectType?: string;
+}
+
+function detectBreadthFilter(query: string): BreadthFilter | null {
+  const q = query.toLowerCase();
+  const isBreadth = BREADTH_PATTERNS.some((p) => p.test(query));
+  if (!isBreadth) return null;
+
+  const filter: BreadthFilter = {};
+  for (const alias of INDUSTRY_ALIAS_KEYS) {
+    if (q.includes(alias)) {
+      const bucket = INDUSTRY_BUCKETS[alias];
+      filter.industries = bucket.industries;
+      filter.sectors = bucket.sectors;
+      break;
+    }
+  }
+  for (const [alias, canonical] of Object.entries(PROJECT_TYPE_ALIASES)) {
+    if (q.includes(alias)) {
+      filter.projectType = canonical;
+      break;
+    }
+  }
+
+  // If no filter dimension found, still treat as breadth only when the query
+  // references projects/portfolio/experience in general.
+  if (!filter.industries && !filter.sectors && !filter.projectType) {
+    if (/\b(portfolio|projects|work|experience|clients)\b/i.test(query)) {
+      return {}; // fetch all projects
+    }
+    return null;
+  }
+  return filter;
+}
+
+// Tier rank for sorting: Hero first, then Detail, then Context, then unknown.
+const TIER_ORDER: Record<string, number> = {
+  Hero: 0,
+  Detail: 1,
+  Context: 2,
+};
+
+function parseChunkToProjectRow(chunk: ChunkResult): ProjectRow {
+  const m = (chunk.metadata || {}) as Record<string, string>;
+  const body = chunk.content || "";
+
+  const grab = (label: string): string => {
+    const re = new RegExp(`^${label}:\\s*(.+)$`, "m");
+    return re.exec(body)?.[1]?.trim() ?? "";
+  };
+
+  const year = m.year || grab("Year");
+  const years = [...year.matchAll(/\d{4}/g)].map((x) => Number(x[0]));
+  const yearSort = years.length ? Math.max(...years) : 0;
+
+  return {
+    client: m.client || grab("Client"),
+    year,
+    yearSort,
+    projectType: m.project_type || grab("Project Type"),
+    industry: m.industry || grab("Industry"),
+    sector: m.sector || grab("Sector"),
+    businessChallenge: grab("Business Challenge"),
+    coreQuestion: grab("Core Question"),
+    outcome: grab("Outcome"),
+    tier: m.tier || grab("Tier"),
+    caseStudyRef: m.case_study_ref || "",
+  };
+}
+
+function sortProjectRows(rows: ProjectRow[]): ProjectRow[] {
+  return [...rows].sort((a, b) => {
+    const ta = TIER_ORDER[a.tier] ?? 3;
+    const tb = TIER_ORDER[b.tier] ?? 3;
+    if (ta !== tb) return ta - tb;
+    if (a.yearSort !== b.yearSort) return b.yearSort - a.yearSort;
+    return a.client.localeCompare(b.client);
+  });
+}
+
+async function fetchProjectRows(
+  filter: BreadthFilter
+): Promise<ChunkResult[]> {
+  // Pull all project chunks (dataset is ~39 rows) and filter in JS. This
+  // gives us OR semantics across industry + sector, which is what we need
+  // so e.g. "healthcare" also surfaces rows marked industry=Social Impact
+  // but sector=Digital Health (like Telehealth Toolbox).
+  const { data, error } = await supabase
+    .from("chunks")
+    .select(
+      "id, document_id, section_heading, content, metadata, documents!inner(doc_type, title)"
+    )
+    .eq("documents.doc_type", "project")
+    .limit(100);
+
+  if (error || !data) {
+    if (error) console.error("Breadth project fetch error:", error);
+    return [];
+  }
+
+  const rows = data.map((row: Record<string, unknown>) => {
+    const docs = row.documents as { doc_type: string; title: string } | null;
+    return {
+      id: row.id as string,
+      document_id: row.document_id as string,
+      section_heading: (row.section_heading as string) || "",
+      content: row.content as string,
+      metadata: (row.metadata as Record<string, unknown>) || {},
+      similarity: 1, // surfaced by filter, not similarity
+      doc_type: docs?.doc_type || "project",
+      doc_title: docs?.title || "",
+    };
+  });
+
+  const industrySet = filter.industries
+    ? new Set(filter.industries.map((s) => s.toLowerCase()))
+    : null;
+  const sectorSet = filter.sectors
+    ? new Set(filter.sectors.map((s) => s.toLowerCase()))
+    : null;
+  const projectType = filter.projectType?.toLowerCase();
+
+  return rows.filter((r) => {
+    const m = (r.metadata || {}) as Record<string, string>;
+    const industry = (m.industry || "").toLowerCase();
+    const sector = (m.sector || "").toLowerCase();
+    const ptype = (m.project_type || "").toLowerCase();
+
+    const industryOk = !industrySet && !sectorSet
+      ? true
+      : (industrySet?.has(industry) ?? false) ||
+        (sectorSet?.has(sector) ?? false);
+    const typeOk = !projectType ? true : ptype === projectType;
+    return industryOk && typeOk;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Parent document retrieval
 // ---------------------------------------------------------------------------
 interface ParentDocument {
@@ -195,6 +413,11 @@ export interface RetrievalResult {
   chunks: ChunkResult[];
   parentDocuments: ParentDocument[];
   contextText: string;
+  /** Populated only for "breadth" queries (e.g. "show me all my healthcare
+   *  projects"). Pre-sorted tier → year desc. The API streams these to the
+   *  client as structured JSON so the UI can render an interactive table
+   *  instead of a Claude-generated markdown table. */
+  breadthProjects: ProjectRow[];
 }
 
 export async function retrieve(query: string, topK: number = 6): Promise<RetrievalResult> {
@@ -203,6 +426,7 @@ export async function retrieve(query: string, topK: number = 6): Promise<Retriev
     chunks: [],
     parentDocuments: [],
     contextText: "",
+    breadthProjects: [],
   };
 
   // Step 1: Check curated Q&A
@@ -225,6 +449,22 @@ export async function retrieve(query: string, topK: number = 6): Promise<Retriev
     chunks = chunks.filter(
       (c) => (c.metadata as Record<string, string>)?.qa_id !== curatedId
     );
+  }
+
+  // Step 2b: Breadth query — if the user asked for "all"/"every"/"full list"
+  // style questions, fetch the full set of matching project rows.
+  // We keep them out of the chunks list (so Claude doesn't hand-write a long
+  // markdown table) and hand them back as structured rows. The API route
+  // streams them as JSON for the client to render as an interactive table.
+  const breadthFilter = detectBreadthFilter(query);
+  if (breadthFilter) {
+    const projectChunks = await fetchProjectRows(breadthFilter);
+    if (projectChunks.length > 0) {
+      const rows = sortProjectRows(
+        projectChunks.map(parseChunkToProjectRow)
+      );
+      result.breadthProjects = rows;
+    }
   }
 
   result.chunks = chunks;

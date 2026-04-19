@@ -2,6 +2,29 @@
 export interface Message {
   role: "user" | "assistant";
   content: string;
+  /** Structured project rows returned by the server for breadth queries.
+   *  When present, MessageBubble renders an interactive ProjectTable
+   *  component below the prose instead of relying on a markdown table. */
+  projectRows?: ProjectRow[];
+}
+
+/** One row of Craig's project database, returned to the client as
+ *  structured JSON for interactive tables. */
+export interface ProjectRow {
+  client: string;
+  year: string;
+  /** Last 4-digit year found in `year`, used for sorting newest-first. */
+  yearSort: number;
+  projectType: string;
+  industry: string;
+  sector: string;
+  businessChallenge: string;
+  coreQuestion: string;
+  outcome: string;
+  /** "Hero" | "Detail" | "Context" | "" */
+  tier: string;
+  /** Slug of the hero case study, if any (e.g. "hoag_case_study"). */
+  caseStudyRef: string;
 }
 
 /** A single SSE chunk from the streaming API */
