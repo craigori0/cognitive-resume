@@ -62,6 +62,25 @@ Preview of the rows the UI will render (pre-sorted Hero → Detail → Context, 
 ${breadthPreview}${retrieval.breadthProjects.length > 10 ? `\n…and ${retrieval.breadthProjects.length - 10} more.` : ""}`
       : "";
 
+    // Breadth-offer mode: depth query that touches a focus area with enough
+    // matching rows to be worth surfacing as a table. Ask Claude to close
+    // with a one-sentence nudge and include a specific <item> in <followups>
+    // so the UI can render a "See all my X work" pill. Clicking that pill
+    // sends a query that definitively matches BREADTH_PATTERNS and triggers
+    // the full table on the next turn.
+    const hasBreadthOffer =
+      !grassMode && !hasBreadthTable && !!retrieval.breadthOffer;
+    const breadthOfferInstruction = hasBreadthOffer
+      ? `
+
+BREADTH OFFER:
+I have ${retrieval.breadthOffer!.count} total projects in ${retrieval.breadthOffer!.label}. You're writing a depth answer here — stay focused on the marquee work the retrieved context highlights. But because more exists than what you're showing, do two things:
+1. BEFORE the <followups> tag, end your answer with a gentle one-sentence nudge inviting the user to see the full picture. Phrase it naturally in first person, e.g. "There's more ${retrieval.breadthOffer!.label} work across the portfolio if you want the full view." Vary the phrasing — don't always say "full view."
+2. Inside your <followups> tag, make sure ONE of the <item> entries is EXACTLY this string (do not paraphrase, do not add quotes):
+<item>See all my ${retrieval.breadthOffer!.label} work</item>
+Keep your other 1-2 follow-ups contextual to the specific answer you just gave.`
+      : "";
+
     // Build the user message with context
     const userMessage = `The user asked: "${message}"
 
@@ -71,7 +90,7 @@ Here is the relevant context retrieved from Craig's knowledge base:
 ${retrieval.contextText}
 </retrieved_context>
 
-Respond to the user's question using the retrieved context. Follow the system prompt guidelines for voice, reasoning, and guardrails. If a curated response is included, use it as the primary basis for your answer while making it feel natural and conversational.${breadthInstruction}`;
+Respond to the user's question using the retrieved context. Follow the system prompt guidelines for voice, reasoning, and guardrails. If a curated response is included, use it as the primary basis for your answer while making it feel natural and conversational.${breadthInstruction}${breadthOfferInstruction}`;
 
     // Build conversation messages — keep clean user messages in history
     const messages: Message[] = [

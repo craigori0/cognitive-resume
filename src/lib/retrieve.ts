@@ -137,6 +137,14 @@ const BREADTH_PATTERNS = [
   /\b(all|full) experience in /i,
   /\bcomplete (list|portfolio) /i,
   /\bwalk me through (your|the|all) /i,
+  // Follow-up / "give me more" phrasings — these catch the second-question
+  // pattern like "do you have any other experience in healthcare?" so the
+  // user doesn't have to escalate to an explicit "show me all" ask.
+  /\bany (other|more) /i,
+  /\bother (\w+ )*(experience|projects|work|clients|engagements|examples|case studies) /i,
+  /\bmore (of your|examples|experience|projects|work) /i,
+  /\bwhat else /i,
+  /\banything else /i,
 ];
 
 // Maps a user-query alias to a set of canonical industry and sector values
@@ -187,6 +195,11 @@ const INDUSTRY_ALIAS_KEYS = Object.keys(INDUSTRY_BUCKETS).sort(
   (a, b) => b.length - a.length
 );
 
+// Minimum number of matching rows before we offer a breadth pill. Below
+// this, a single case study + surrounding chunks is enough and a table
+// would feel thin.
+const BREADTH_OFFER_THRESHOLD = 3;
+
 const PROJECT_TYPE_ALIASES: Record<string, string> = {
   "product strategy": "Product Strategy",
   "experience strategy": "Experience Strategy",
@@ -201,36 +214,60 @@ interface BreadthFilter {
   projectType?: string;
 }
 
-function detectBreadthFilter(query: string): BreadthFilter | null {
-  const q = query.toLowerCase();
-  const isBreadth = BREADTH_PATTERNS.some((p) => p.test(query));
-  if (!isBreadth) return null;
+// Pulls industry/sector/type from the raw query text. Shared between the
+// "full breadth" detector and the "breadth offer" detector — the only
+// difference between those two is whether breadth keywords ("all", "every",
+// "walk me through") are also present.
+interface FocusScope extends BreadthFilter {
+  /** Display label — what we'd call this focus area in a UI pill or
+   *  prompt nudge, e.g. "healthcare", "fintech", "product strategy". */
+  label: string;
+}
 
-  const filter: BreadthFilter = {};
+function detectFocusScope(query: string): FocusScope | null {
+  const q = query.toLowerCase();
+  let label = "";
+  const scope: BreadthFilter = {};
+
   for (const alias of INDUSTRY_ALIAS_KEYS) {
     if (q.includes(alias)) {
       const bucket = INDUSTRY_BUCKETS[alias];
-      filter.industries = bucket.industries;
-      filter.sectors = bucket.sectors;
+      scope.industries = bucket.industries;
+      scope.sectors = bucket.sectors;
+      label = alias;
       break;
     }
   }
   for (const [alias, canonical] of Object.entries(PROJECT_TYPE_ALIASES)) {
     if (q.includes(alias)) {
-      filter.projectType = canonical;
+      scope.projectType = canonical;
+      if (!label) label = alias;
       break;
     }
   }
 
-  // If no filter dimension found, still treat as breadth only when the query
-  // references projects/portfolio/experience in general.
-  if (!filter.industries && !filter.sectors && !filter.projectType) {
-    if (/\b(portfolio|projects|work|experience|clients)\b/i.test(query)) {
-      return {}; // fetch all projects
-    }
-    return null;
+  if (!label) return null;
+  return { ...scope, label };
+}
+
+function detectBreadthFilter(query: string): BreadthFilter | null {
+  const isBreadth = BREADTH_PATTERNS.some((p) => p.test(query));
+  if (!isBreadth) return null;
+
+  const scope = detectFocusScope(query);
+  if (scope) {
+    const { label: _label, ...filter } = scope;
+    void _label;
+    return filter;
   }
-  return filter;
+
+  // No industry/type found. Still treat as breadth when the query references
+  // projects/portfolio/experience in general — e.g. "walk me through your
+  // portfolio" should return everything.
+  if (/\b(portfolio|projects|work|experience|clients)\b/i.test(query)) {
+    return {};
+  }
+  return null;
 }
 
 // Tier rank for sorting: Hero first, then Detail, then Context, then unknown.
@@ -418,6 +455,14 @@ export interface RetrievalResult {
    *  client as structured JSON so the UI can render an interactive table
    *  instead of a Claude-generated markdown table. */
   breadthProjects: ProjectRow[];
+  /** Populated on depth queries that reference a focus area with enough
+   *  matching rows to be worth surfacing as a table. The API uses this to
+   *  ask Claude to close with a nudge line and inject a "See all my X work"
+   *  pill into <followups>. */
+  breadthOffer?: {
+    label: string;
+    count: number;
+  };
 }
 
 export async function retrieve(query: string, topK: number = 6): Promise<RetrievalResult> {
@@ -464,6 +509,19 @@ export async function retrieve(query: string, topK: number = 6): Promise<Retriev
         projectChunks.map(parseChunkToProjectRow)
       );
       result.breadthProjects = rows;
+    }
+  } else {
+    // Step 2c: Breadth offer — depth query that references a specific focus
+    // area. If there are enough matching rows, flag it so the API can
+    // inject a "See all my X work" pill. This teaches users the table
+    // mode exists without forcing a table they didn't ask for.
+    const focusScope = detectFocusScope(query);
+    if (focusScope) {
+      const { label, ...offerFilter } = focusScope;
+      const projectChunks = await fetchProjectRows(offerFilter);
+      if (projectChunks.length >= BREADTH_OFFER_THRESHOLD) {
+        result.breadthOffer = { label, count: projectChunks.length };
+      }
     }
   }
 
