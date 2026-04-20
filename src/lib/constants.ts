@@ -22,6 +22,15 @@ export const CURATED_FOLLOWUPS: [string[], string[]][] = [
       "Let's talk about your work at frog",
     ],
   ],
+  [
+    // Triggers for "What work are you most proud of?"
+    ["what work are you most proud of", "proudest work", "what are you most proud of", "what are you most proud"],
+    [
+      "Tell me more about Hoag",
+      "Walk me through the PepsiCo AI system",
+      "What is Keystone?",
+    ],
+  ],
 ];
 
 export const SUGGESTED_PROMPTS = [
@@ -213,4 +222,5 @@ export const CURATED_TRIGGERS: Record<string, string[]> = {
   Q7: ["what differentiates you", "what sets you apart", "why should we hire you", "what makes you unique"],
   Q8: ["what are you looking for", "what kind of role", "what's next", "career goals", "ideal role"],
   Q9: ["tell me about your time at frog", "tell me about your role at frog", "what do you do at frog", "your work at frog", "frog design"],
+  Q10: ["what work are you most proud of", "proudest work", "best work", "favorite project", "work you are proud of", "what are you most proud"],
 };
