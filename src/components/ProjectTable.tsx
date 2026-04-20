@@ -7,55 +7,64 @@ interface ProjectTableProps {
   rows: ProjectRow[];
 }
 
-const TIER_ORDER = ["Hero", "Detail", "Context"] as const;
-type TierKey = (typeof TIER_ORDER)[number];
+// Two-tab filter for recruiters. The internal Hero / Detail / Context
+// tiers still drive sort order on the server (Hero first, then Detail,
+// then Context), but those internal labels are never exposed to users —
+// "Top Projects" surfaces Hero only, "All Projects" shows everything.
+const TABS = [
+  { key: "all", label: "All Projects" },
+  { key: "top", label: "Top Projects" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
 
 // How many rows to show before the "Show all" button is offered.
 const INITIAL_ROW_LIMIT = 6;
 
 export default function ProjectTable({ rows }: ProjectTableProps) {
-  const [activeTier, setActiveTier] = useState<TierKey | "All">("All");
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [expanded, setExpanded] = useState(false);
 
-  // Count rows per tier for the chip labels.
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { All: rows.length };
-    for (const tier of TIER_ORDER) c[tier] = 0;
-    for (const row of rows) {
-      const t = row.tier && TIER_ORDER.includes(row.tier as TierKey) ? row.tier : "Context";
-      c[t] = (c[t] || 0) + 1;
-    }
-    return c;
-  }, [rows]);
+  const counts = useMemo(
+    () => ({
+      all: rows.length,
+      top: rows.filter((r) => r.tier === "Hero").length,
+    }),
+    [rows]
+  );
 
   const filtered = useMemo(() => {
-    if (activeTier === "All") return rows;
-    return rows.filter((r) => (r.tier || "Context") === activeTier);
-  }, [rows, activeTier]);
+    if (activeTab === "top") return rows.filter((r) => r.tier === "Hero");
+    return rows;
+  }, [rows, activeTab]);
 
   const visible = expanded ? filtered : filtered.slice(0, INITIAL_ROW_LIMIT);
   const hiddenCount = filtered.length - visible.length;
 
   return (
     <div className="project-table">
-      <div className="project-table-controls" role="toolbar" aria-label="Filter projects by tier">
-        {(["All", ...TIER_ORDER] as const).map((tier) => {
-          const count = counts[tier] ?? 0;
-          const disabled = tier !== "All" && count === 0;
-          const active = activeTier === tier;
+      <div
+        className="project-table-controls"
+        role="tablist"
+        aria-label="Project view"
+      >
+        {TABS.map((tab) => {
+          const count = counts[tab.key];
+          const disabled = count === 0;
+          const active = activeTab === tab.key;
           return (
             <button
-              key={tier}
+              key={tab.key}
+              role="tab"
+              aria-selected={active}
+              disabled={disabled}
               onClick={() => {
                 if (disabled) return;
-                setActiveTier(tier);
+                setActiveTab(tab.key);
                 setExpanded(false);
               }}
-              disabled={disabled}
               className={`project-chip ${active ? "project-chip-active" : ""} ${disabled ? "project-chip-disabled" : ""}`}
-              aria-pressed={active}
             >
-              <span>{tier}</span>
+              <span>{tab.label}</span>
               <span className="project-chip-count">{count}</span>
             </button>
           );
@@ -76,16 +85,7 @@ export default function ProjectTable({ rows }: ProjectTableProps) {
           <tbody>
             {visible.map((r, i) => (
               <tr key={`${r.client}-${r.year}-${i}`}>
-                <td>
-                  <div className="project-client">
-                    <span>{r.client}</span>
-                    {r.tier && (
-                      <span className={`project-tier-badge project-tier-${r.tier.toLowerCase()}`}>
-                        {r.tier}
-                      </span>
-                    )}
-                  </div>
-                </td>
+                <td>{r.client}</td>
                 <td className="project-year">{r.year || "—"}</td>
                 <td>
                   {r.industry}
@@ -100,7 +100,7 @@ export default function ProjectTable({ rows }: ProjectTableProps) {
             {visible.length === 0 && (
               <tr>
                 <td colSpan={5} className="project-empty">
-                  No projects match that filter.
+                  No projects to show.
                 </td>
               </tr>
             )}
@@ -113,7 +113,8 @@ export default function ProjectTable({ rows }: ProjectTableProps) {
           onClick={() => setExpanded(true)}
           className="project-expand"
         >
-          Show all {filtered.length} {activeTier === "All" ? "projects" : activeTier.toLowerCase() + " projects"}
+          Show all {filtered.length}{" "}
+          {activeTab === "top" ? "top projects" : "projects"}
         </button>
       )}
       {expanded && filtered.length > INITIAL_ROW_LIMIT && (
