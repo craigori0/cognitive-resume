@@ -30,16 +30,16 @@ export const SUGGESTED_PROMPTS = [
     prompt: "What is this? What am I talking to?",
   },
   {
-    label: "Why did you build this?",
-    prompt: "Why did you build this instead of just having a normal resume?",
-  },
-  {
     label: "What can I ask you about?",
     prompt: "What can I ask you about?",
   },
   {
     label: "Tell me about yourself",
     prompt: "Tell me about yourself",
+  },
+  {
+    label: "What work are you most proud of?",
+    prompt: "What work are you most proud of?",
   },
   {
     label: "What are you excited about right now?",
