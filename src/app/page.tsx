@@ -345,9 +345,16 @@ function ConversationLayout({
           )}
           <ChatInput onSend={onSend} disabled={isStreaming} />
         </div>
-        <p className="mt-3 max-w-[384px] text-[12px] leading-[18px] text-center text-[rgba(31,27,22,0.3)]">
+        <p className="mt-3 max-w-[420px] text-[12px] leading-[18px] text-center text-[rgba(31,27,22,0.3)]">
           Responses are generated based on reasoning over Craig&apos;s authored
-          knowledge base. Reach out directly for a real conversation.
+          knowledge base.{" "}
+          <a
+            href="mailto:craig@ciserodesign.co"
+            className="text-[rgba(31,27,22,0.55)] underline decoration-dotted underline-offset-2 hover:text-[rgba(31,27,22,0.8)] transition-colors"
+          >
+            Reach out directly
+          </a>{" "}
+          for a real conversation.
         </p>
       </div>
     </main>
