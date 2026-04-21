@@ -130,9 +130,16 @@ Respond to the user's question using the retrieved context. Follow the system pr
           // After Claude's prose, append the structured project table
           // payload if this was a breadth query. The client pulls the
           // JSON out of the buffered text and renders a <ProjectTable />.
+          // Payload shape: { rows, defaultView } — defaultView tells the
+          // UI whether to open on "Top Projects" or "All Projects" based
+          // on how the user phrased their query.
           if (hasBreadthTable) {
+            const tablePayload = {
+              rows: retrieval.breadthProjects,
+              defaultView: retrieval.breadthDefaultView,
+            };
             const tableBlock = `\n\n<project_table>${JSON.stringify(
-              retrieval.breadthProjects
+              tablePayload
             )}</project_table>`;
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ text: tableBlock })}\n\n`)

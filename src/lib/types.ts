@@ -6,6 +6,10 @@ export interface Message {
    *  When present, MessageBubble renders an interactive ProjectTable
    *  component below the prose instead of relying on a markdown table. */
   projectRows?: ProjectRow[];
+  /** Which tab ProjectTable should open on. Server sends "all" when the
+   *  query contained an explicit exhaustive marker ("all projects",
+   *  "complete portfolio", etc.), otherwise "top". */
+  projectTableDefaultView?: "all" | "top";
 }
 
 /** One row of Craig's project database, returned to the client as

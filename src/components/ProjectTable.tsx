@@ -5,23 +5,32 @@ import type { ProjectRow } from "@/lib/types";
 
 interface ProjectTableProps {
   rows: ProjectRow[];
+  /** Which tab to open with. The server decides based on the user's query
+   *  wording — explicit asks like "all projects" / "complete portfolio"
+   *  land on "all", everything else defaults to "top". */
+  defaultView?: "all" | "top";
 }
 
 // Two-tab filter for recruiters. The internal Hero / Detail / Context
 // tiers still drive sort order on the server (Hero first, then Detail,
 // then Context), but those internal labels are never exposed to users —
 // "Top Projects" surfaces Hero only, "All Projects" shows everything.
+// Order reflects the scan pattern: most recruiters want the short list
+// first, then can click into the full table.
 const TABS = [
-  { key: "all", label: "All Projects" },
   { key: "top", label: "Top Projects" },
+  { key: "all", label: "All Projects" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
 // How many rows to show before the "Show all" button is offered.
 const INITIAL_ROW_LIMIT = 6;
 
-export default function ProjectTable({ rows }: ProjectTableProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>("all");
+export default function ProjectTable({
+  rows,
+  defaultView = "top",
+}: ProjectTableProps) {
+  const [activeTab, setActiveTab] = useState<TabKey>(defaultView);
   const [expanded, setExpanded] = useState(false);
 
   const counts = useMemo(
@@ -76,30 +85,34 @@ export default function ProjectTable({ rows }: ProjectTableProps) {
           <thead>
             <tr>
               <th scope="col">Client</th>
-              <th scope="col">Year</th>
-              <th scope="col">Industry</th>
               <th scope="col">Project Type</th>
+              <th scope="col">Industry</th>
+              <th scope="col">Core Question</th>
               <th scope="col">Outcome</th>
+              <th scope="col">Year</th>
             </tr>
           </thead>
           <tbody>
             {visible.map((r, i) => (
               <tr key={`${r.client}-${r.year}-${i}`}>
                 <td>{r.client}</td>
-                <td className="project-year">{r.year || "—"}</td>
+                <td>{r.projectType || "—"}</td>
                 <td>
                   {r.industry}
                   {r.sector ? (
                     <span className="project-sector"> · {r.sector}</span>
                   ) : null}
                 </td>
-                <td>{r.projectType || "—"}</td>
+                <td className="project-core-question">
+                  {r.coreQuestion || "—"}
+                </td>
                 <td className="project-outcome">{r.outcome || "—"}</td>
+                <td className="project-year">{r.year || "—"}</td>
               </tr>
             ))}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={5} className="project-empty">
+                <td colSpan={6} className="project-empty">
                   No projects to show.
                 </td>
               </tr>

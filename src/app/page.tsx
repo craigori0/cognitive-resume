@@ -103,7 +103,11 @@ export default function ChatPage() {
 
       // Strip <project_table> tag from visible text; parse the JSON so
       // MessageBubble can render an interactive table below the prose.
+      // Payload shape is either { rows, defaultView } (current) or a bare
+      // ProjectRow[] (legacy) — we accept both for backwards compatibility
+      // during rollouts.
       let projectRows: ProjectRow[] | undefined;
+      let projectTableDefaultView: "all" | "top" | undefined;
       const tableMatch = fullText.match(
         /<project_table>\s*([\s\S]*?)\s*<\/project_table>/
       );
@@ -113,6 +117,15 @@ export default function ChatPage() {
           const parsed = JSON.parse(tableMatch[1]);
           if (Array.isArray(parsed) && parsed.length > 0) {
             projectRows = parsed as ProjectRow[];
+          } else if (
+            parsed &&
+            Array.isArray(parsed.rows) &&
+            parsed.rows.length > 0
+          ) {
+            projectRows = parsed.rows as ProjectRow[];
+            if (parsed.defaultView === "all" || parsed.defaultView === "top") {
+              projectTableDefaultView = parsed.defaultView;
+            }
           }
         } catch {
           // Malformed payload — silently fall back to prose only.
@@ -149,7 +162,12 @@ export default function ChatPage() {
       // Thinking indicator stays visible until we start revealing.
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "", projectRows },
+        {
+          role: "assistant",
+          content: "",
+          projectRows,
+          projectTableDefaultView,
+        },
       ]);
       setIsThinking(false);
 
@@ -175,6 +193,7 @@ export default function ChatPage() {
               role: "assistant",
               content: fullText.slice(0, displayed),
               projectRows: prior?.projectRows,
+              projectTableDefaultView: prior?.projectTableDefaultView,
             };
             return updated;
           });
@@ -325,6 +344,7 @@ function ConversationLayout({
               role={msg.role}
               content={msg.content}
               projectRows={msg.projectRows}
+              projectTableDefaultView={msg.projectTableDefaultView}
               isStreaming={
                 isStreaming &&
                 i === messages.length - 1 &&

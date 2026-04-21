@@ -10,6 +10,7 @@ interface MessageBubbleProps {
   content: string;
   isStreaming?: boolean;
   projectRows?: ProjectRow[];
+  projectTableDefaultView?: "all" | "top";
 }
 
 export default function MessageBubble({
@@ -17,6 +18,7 @@ export default function MessageBubble({
   content,
   isStreaming = false,
   projectRows,
+  projectTableDefaultView,
 }: MessageBubbleProps) {
   const isUser = role === "user";
 
@@ -61,7 +63,10 @@ export default function MessageBubble({
       </div>
 
       {hasStructuredTable && !isStreaming && (
-        <ProjectTable rows={projectRows!} />
+        <ProjectTable
+          rows={projectRows!}
+          defaultView={projectTableDefaultView}
+        />
       )}
     </div>
   );

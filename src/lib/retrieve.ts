@@ -200,6 +200,27 @@ const INDUSTRY_ALIAS_KEYS = Object.keys(INDUSTRY_BUCKETS).sort(
 // would feel thin.
 const BREADTH_OFFER_THRESHOLD = 3;
 
+// Explicit exhaustive markers — when present, default the table to the
+// "All Projects" view instead of "Top Projects". A recruiter who says
+// "all my healthcare projects" genuinely wants the full list up front;
+// anyone else asking a breadth question (e.g. "other projects in
+// healthcare", "walk me through your portfolio") is better served by
+// Top first with a one-click expand to All.
+const EXHAUSTIVE_PATTERNS = [
+  // "all my projects" / "all my healthcare work" / "all of your portfolio" —
+  // allow an optional industry/topic modifier between the possessive and
+  // the noun so the "See all my X work" breadth pill routes to All view.
+  /\b(all|every) (of )?(your|my|craig'?s?)( \w+){0,3} (projects|work|portfolio|engagements|experience)/i,
+  /\ball the (projects|work|engagements)/i,
+  /\bevery (project|engagement|client)/i,
+  /\b(full|complete|entire) (portfolio|list|experience)/i,
+  /\b(full|all) experience in/i,
+];
+
+function detectDefaultView(query: string): "all" | "top" {
+  return EXHAUSTIVE_PATTERNS.some((p) => p.test(query)) ? "all" : "top";
+}
+
 const PROJECT_TYPE_ALIASES: Record<string, string> = {
   "product strategy": "Product Strategy",
   "experience strategy": "Experience Strategy",
@@ -455,6 +476,12 @@ export interface RetrievalResult {
    *  client as structured JSON so the UI can render an interactive table
    *  instead of a Claude-generated markdown table. */
   breadthProjects: ProjectRow[];
+  /** Which table tab to open with. "all" only when the query contains an
+   *  explicit exhaustive marker ("all projects", "complete portfolio", etc).
+   *  Otherwise "top" — most breadth queries are better served by showing
+   *  the Hero tier first, since the full table is long and scannable by
+   *  clicking the All Projects chip. */
+  breadthDefaultView: "all" | "top";
   /** Populated on depth queries that reference a focus area with enough
    *  matching rows to be worth surfacing as a table. The API uses this to
    *  ask Claude to close with a nudge line and inject a "See all my X work"
@@ -472,6 +499,7 @@ export async function retrieve(query: string, topK: number = 6): Promise<Retriev
     parentDocuments: [],
     contextText: "",
     breadthProjects: [],
+    breadthDefaultView: detectDefaultView(query),
   };
 
   // Step 1: Check curated Q&A
