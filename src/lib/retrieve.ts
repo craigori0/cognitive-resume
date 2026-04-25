@@ -59,7 +59,11 @@ function checkCuratedMatch(query: string): string | null {
       const contentOverlap = [...triggerContent].filter((w) => queryContent.has(w)).length;
       const hasContentMatch = triggerContent.size > 0 ? contentOverlap >= 1 : true;
 
-      if (score > bestScore && score >= 0.5 && hasContentMatch) {
+      // 0.65 threshold blocks generic-word collisions like
+      // "how does the strategy framework work?" matching Q3's
+      // "how does this work" via shared {how, does, work}. Real matches
+      // typically score ≥0.7 because users repeat the trigger phrasing.
+      if (score > bestScore && score >= 0.65 && hasContentMatch) {
         bestScore = score;
         bestMatch = qaId;
       }
