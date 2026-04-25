@@ -31,6 +31,30 @@ export const CURATED_FOLLOWUPS: [string[], string[]][] = [
       "What is Keystone?",
     ],
   ],
+  [
+    // Triggers for "What are you excited about right now?" / Q11 thesis questions
+    [
+      "what are you excited about",
+      "what are you excited about right now",
+      "what's your perspective on ai",
+      "whats your perspective on ai",
+      "what's your take on ai",
+      "whats your take on ai",
+      "what's your thesis",
+      "whats your thesis",
+      "what's your pov",
+      "whats your pov",
+      "what's your point of view",
+      "whats your point of view",
+      "where do you see this going",
+      "tell me about your thesis",
+    ],
+    [
+      "Tell me more about the cognitive system economy",
+      "Deep dive on Keystone",
+      "Deep dive on the Living Research Model",
+    ],
+  ],
 ];
 
 export const SUGGESTED_PROMPTS = [
