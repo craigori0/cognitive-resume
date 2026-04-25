@@ -564,14 +564,11 @@ export async function retrieve(query: string, topK: number = 6): Promise<Retriev
   const parentDocs = await getParentDocuments(caseStudyDocIds);
   result.parentDocuments = parentDocs;
 
-  // Step 4: Format context
+  // Step 4: Format context. When a curated Q&A response matches, we use it
+  // as the sole answer — appending semantic hits caused Claude to blend in
+  // extra KO content and stray from the scripted response.
   if (!result.contextText) {
     result.contextText = formatRetrievalContext(chunks, parentDocs);
-  } else {
-    const supplemental = formatRetrievalContext(chunks, parentDocs);
-    if (supplemental) {
-      result.contextText += `\n\n---\nAdditional context from knowledge base:\n${supplemental}`;
-    }
   }
 
   return result;
