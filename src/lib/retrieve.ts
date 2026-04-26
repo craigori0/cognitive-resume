@@ -127,7 +127,11 @@ async function semanticSearch(
 // pull every matching project row from the project_database instead of the
 // top-K semantic hits. This keeps tables complete instead of showing 2 of 9.
 // ---------------------------------------------------------------------------
-const BREADTH_PATTERNS = [
+// Strict patterns explicitly request the total set ("all", "every", "complete
+// portfolio"). When these fire without a recognized industry/type focus, we
+// can safely fall back to "all projects" because the user really did ask for
+// everything.
+const STRICT_BREADTH_PATTERNS = [
   /\ball (of )?(your|my|craig'?s?) /i,
   /\ball the /i,
   /\bevery /i,
@@ -141,15 +145,21 @@ const BREADTH_PATTERNS = [
   /\b(all|full) experience in /i,
   /\bcomplete (list|portfolio) /i,
   /\bwalk me through (your|the|all) /i,
-  // Follow-up / "give me more" phrasings — these catch the second-question
-  // pattern like "do you have any other experience in healthcare?" so the
-  // user doesn't have to escalate to an explicit "show me all" ask.
+];
+
+// Loose follow-up phrasings ("any other", "other X", "what else", "more of").
+// These read as "give me more on this topic" — only useful when there's a
+// recognized scope (industry/type). Without a scope, "what other AI projects?"
+// or "what else have you built?" should NOT dump all 39 projects into a table.
+const LOOSE_BREADTH_PATTERNS = [
   /\bany (other|more) /i,
   /\bother (\w+ )*(experience|projects|work|clients|engagements|examples|case studies) /i,
   /\bmore (of your|examples|experience|projects|work) /i,
   /\bwhat else /i,
   /\banything else /i,
 ];
+
+const BREADTH_PATTERNS = [...STRICT_BREADTH_PATTERNS, ...LOOSE_BREADTH_PATTERNS];
 
 // Maps a user-query alias to a set of canonical industry and sector values
 // a project can live under. When the user says "healthcare", we want every
@@ -286,10 +296,16 @@ function detectBreadthFilter(query: string): BreadthFilter | null {
     return filter;
   }
 
-  // No industry/type found. Still treat as breadth when the query references
-  // projects/portfolio/experience in general — e.g. "walk me through your
-  // portfolio" should return everything.
-  if (/\b(portfolio|projects|work|experience|clients)\b/i.test(query)) {
+  // No industry/type found. Only fall back to "all projects" when the user
+  // used a STRICT total-set marker ("all your projects", "walk me through
+  // your portfolio"). Loose follow-ups ("other AI projects", "what else?")
+  // without a recognized scope should NOT dump the full table — let the
+  // model answer in prose with a few specific picks instead.
+  const hasStrictMarker = STRICT_BREADTH_PATTERNS.some((p) => p.test(query));
+  if (
+    hasStrictMarker &&
+    /\b(portfolio|projects|work|experience|clients)\b/i.test(query)
+  ) {
     return {};
   }
   return null;
