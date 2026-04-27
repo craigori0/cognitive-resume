@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import ProjectTable from "./ProjectTable";
+import PortfolioPointer from "./PortfolioPointer";
 import type { ProjectRow } from "@/lib/types";
 
 interface MessageBubbleProps {
@@ -11,6 +12,7 @@ interface MessageBubbleProps {
   isStreaming?: boolean;
   projectRows?: ProjectRow[];
   projectTableDefaultView?: "all" | "top";
+  showPortfolioPointer?: boolean;
 }
 
 export default function MessageBubble({
@@ -19,6 +21,7 @@ export default function MessageBubble({
   isStreaming = false,
   projectRows,
   projectTableDefaultView,
+  showPortfolioPointer = false,
 }: MessageBubbleProps) {
   const isUser = role === "user";
 
@@ -68,6 +71,8 @@ export default function MessageBubble({
           defaultView={projectTableDefaultView}
         />
       )}
+
+      {showPortfolioPointer && !isStreaming && <PortfolioPointer />}
     </div>
   );
 }

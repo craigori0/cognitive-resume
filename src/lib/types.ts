@@ -10,6 +10,11 @@ export interface Message {
    *  query contained an explicit exhaustive marker ("all projects",
    *  "complete portfolio", etc.), otherwise "top". */
   projectTableDefaultView?: "all" | "top";
+  /** When true, MessageBubble renders a <PortfolioPointer /> CTA card
+   *  beneath the prose. Set by the client when a curated answer carries
+   *  the <portfolio_pointer /> tag AND it hasn't been shown earlier in
+   *  the session (one-per-session dedup). */
+  showPortfolioPointer?: boolean;
 }
 
 /** One row of Craig's project database, returned to the client as

@@ -33,6 +33,10 @@ export default function ChatPage() {
   const [followups, setFollowups] = useState<string[]>([]);
   const [grassMode, setGrassMode] = useState(false);
   const [grassUsed, setGrassUsed] = useState(false);
+  // One-per-session: the portfolio CTA card renders below the first answer
+  // that carries a <portfolio_pointer /> tag (Q9 frog, Q10 most-proud).
+  // Subsequent matches strip the tag silently to avoid repetition.
+  const [portfolioPointerShown, setPortfolioPointerShown] = useState(false);
   const revealRafRef = useRef<number>(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +57,7 @@ export default function ChatPage() {
       setFollowups([]);
       setGrassMode(false);
       setGrassUsed(false);
+      setPortfolioPointerShown(false);
     };
     window.addEventListener("chat:reset", handleReset);
     return () => window.removeEventListener("chat:reset", handleReset);
@@ -132,6 +137,19 @@ export default function ChatPage() {
         }
       }
 
+      // Strip <portfolio_pointer /> marker. We render the CTA card at
+      // most once per session — subsequent matches drop the tag silently
+      // to avoid repetition (e.g., user asks Q9 then Q10).
+      let showPortfolioPointer = false;
+      const pointerMatch = fullText.match(/<portfolio_pointer\s*\/?>/);
+      if (pointerMatch) {
+        fullText = fullText.replace(pointerMatch[0], "").trimEnd();
+        if (!portfolioPointerShown) {
+          showPortfolioPointer = true;
+          setPortfolioPointerShown(true);
+        }
+      }
+
       // Use curated followups for the opening funnel, otherwise
       // fall back to Claude's contextual <followups>.
       let newFollowups: string[] = [];
@@ -167,6 +185,7 @@ export default function ChatPage() {
           content: "",
           projectRows,
           projectTableDefaultView,
+          showPortfolioPointer,
         },
       ]);
       setIsThinking(false);
@@ -194,6 +213,7 @@ export default function ChatPage() {
               content: fullText.slice(0, displayed),
               projectRows: prior?.projectRows,
               projectTableDefaultView: prior?.projectTableDefaultView,
+              showPortfolioPointer: prior?.showPortfolioPointer,
             };
             return updated;
           });
@@ -213,7 +233,7 @@ export default function ChatPage() {
           updated[updated.length - 1] = {
             role: "assistant",
             content:
-              "I wasn't able to find relevant information for that question. Try asking about Craig's projects, skills, or career — or reach out directly at craig.cisero@gmail.com.",
+              "I wasn't able to find relevant information for that question. Try asking about Craig's projects, skills, or career — or reach out directly at craig@ciserodesign.co.",
           };
           return updated;
         });
@@ -224,7 +244,7 @@ export default function ChatPage() {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         const errorContent =
-          "Sorry, something went wrong. Please try again, or reach out to Craig directly at craig.cisero@gmail.com.";
+          "Sorry, something went wrong. Please try again, or reach out to Craig directly at craig@ciserodesign.co.";
         if (last?.role === "assistant") {
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -345,6 +365,7 @@ function ConversationLayout({
               content={msg.content}
               projectRows={msg.projectRows}
               projectTableDefaultView={msg.projectTableDefaultView}
+              showPortfolioPointer={msg.showPortfolioPointer}
               isStreaming={
                 isStreaming &&
                 i === messages.length - 1 &&
