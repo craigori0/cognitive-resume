@@ -22,8 +22,13 @@ export async function POST(req: NextRequest) {
       message,
       history = [],
       grassMode = false,
-    }: { message: string; history: Message[]; grassMode?: boolean } =
-      await req.json();
+      suppressPills = false,
+    }: {
+      message: string;
+      history: Message[];
+      grassMode?: boolean;
+      suppressPills?: boolean;
+    } = await req.json();
 
     if (!message?.trim()) {
       return Response.json({ error: "Message is required" }, { status: 400 });
@@ -67,9 +72,13 @@ ${breadthPreview}${retrieval.breadthProjects.length > 10 ? `\n…and ${retrieval
     // with a one-sentence nudge and include a specific <item> in <followups>
     // so the UI can render a "See all my X work" pill. Clicking that pill
     // sends a query that definitively matches BREADTH_PATTERNS and triggers
-    // the full table on the next turn.
+    // the full table on the next turn. Disabled when pills are suppressed —
+    // the inline pointer format covers the same affordance.
     const hasBreadthOffer =
-      !grassMode && !hasBreadthTable && !!retrieval.breadthOffer;
+      !grassMode &&
+      !hasBreadthTable &&
+      !suppressPills &&
+      !!retrieval.breadthOffer;
     const breadthOfferInstruction = hasBreadthOffer
       ? `
 
@@ -81,6 +90,18 @@ I have ${retrieval.breadthOffer!.count} total projects in ${retrieval.breadthOff
 Keep your other 1-2 follow-ups contextual to the specific answer you just gave.`
       : "";
 
+    // Follow-up mode instruction. The UI shows pill prompts only on the
+    // first turn and on dead-end recoveries; otherwise it hides them and
+    // lets the user type whatever they want. When suppressed, we tell
+    // Claude to omit the <followups> tag. Plain-prose suggestions about
+    // adjacent threads are still welcome — they just can't be clickable
+    // links or special markdown formats. The user types if interested.
+    const followupModeInstruction = grassMode
+      ? "" // Grass mode keeps its own followup contract (see GRASS_MODE_PROMPT).
+      : suppressPills
+        ? `\n\nFOLLOW-UP MODE: skip the <followups> tag on this response. The UI is hiding follow-up pills for this turn. If a genuinely high-value adjacent thread exists, you may mention it naturally in your prose — a single short sentence like "There's a deeper story on the Hoag work if you want it" or "I can walk you through Deliveroo too." Plain prose only: NO markdown links, NO clickable buttons, NO ask:-style URLs. Only mention an adjacent thread when it adds real value; if the answer is complete, just stop.`
+        : "";
+
     // Build the user message with context
     const userMessage = `The user asked: "${message}"
 
@@ -90,7 +111,7 @@ Here is the relevant context retrieved from Craig's knowledge base:
 ${retrieval.contextText}
 </retrieved_context>
 
-Respond to the user's question using the retrieved context. Follow the system prompt guidelines for voice, reasoning, and guardrails. If a curated response is included, use it as the primary basis for your answer while making it feel natural and conversational.${breadthInstruction}${breadthOfferInstruction}`;
+Respond to the user's question using the retrieved context. Follow the system prompt guidelines for voice, reasoning, and guardrails. If a curated response is included, use it as the primary basis for your answer while making it feel natural and conversational.${breadthInstruction}${breadthOfferInstruction}${followupModeInstruction}`;
 
     // Build conversation messages — keep clean user messages in history
     const messages: Message[] = [

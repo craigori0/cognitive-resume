@@ -4,6 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChatIcon, PersonIcon, LinkedInIcon } from "./Icons";
 
+// Wordmark for the top-left brand. Currently testing alternatives —
+// swap the active value below to try a different name.
+//   Options:
+//     "Craig RAG"             ← original
+//     "The Cognitive Resume"  ← formal, descriptive
+//     "Cognitive Resume"      ← shorter
+//     "CrAIg Resume"          ← playful, embedded "AI"
+const WORDMARK = "Craig RAG";
+
 const dockBase =
   "flex items-center justify-center w-8 h-8 rounded-full text-[#1f1b16] transition-colors";
 
@@ -30,7 +39,7 @@ export default function Header() {
           onClick={handleHomeClick}
           className="font-light text-[18px] tracking-[-0.18px] text-[#1f1b16]"
         >
-          Craig RAG
+          {WORDMARK}
         </Link>
 
         <nav

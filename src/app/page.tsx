@@ -14,7 +14,16 @@ import { CURATED_FOLLOWUPS } from "@/lib/constants";
 import type { Message, ProjectRow } from "@/lib/types";
 
 const GRASS_PILL = "Enough AI talk, let\u2019s touch grass.";
-const GRASS_TURN_THRESHOLD = 4; // show after this many user messages
+const GRASS_TURN_THRESHOLD = 3; // show after this many user messages
+
+// Recovery pills shown when the model has no useful answer (dead-end).
+// Lets the user reset to a known-good entry point instead of staring at
+// an empty input.
+const RECOVERY_PILLS = [
+  "What is this?",
+  "What can I ask you about?",
+  "Tell me about yourself",
+];
 
 function getCuratedFollowups(query: string): string[] | null {
   const normalized = query.toLowerCase().replace(/\?/g, "").trim();
@@ -40,13 +49,16 @@ export default function ChatPage() {
   const revealRafRef = useRef<number>(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Scroll only when the user sends a new message (called explicitly from
+  // sendMessage after the user bubble is added). We deliberately do NOT
+  // auto-scroll on every messages/isThinking change — that pinned the view
+  // to the bottom during streaming and prevented the user from reading at
+  // their own pace. Once the conversation is moving, the view stays put;
+  // the floating ↓ button lets the user jump to the latest content when
+  // they're ready.
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isThinking, scrollToBottom]);
 
   useEffect(() => {
     const handleReset = () => {
@@ -64,6 +76,10 @@ export default function ChatPage() {
   }, []);
 
   const sendMessage = async (text: string) => {
+    // Guard: ignore re-entrant sends (e.g. inline ask: links clicked while
+    // a previous response is still streaming).
+    if (isStreaming) return;
+
     // Intercept the grass pill — open overlay instead of sending a message
     if (text === GRASS_PILL) {
       setGrassMode(true);
@@ -72,11 +88,22 @@ export default function ChatPage() {
       return;
     }
 
+    // Pills are shown on the first turn (cold start) and on dead-end
+    // recoveries. From the second turn onward we ask the model to use the
+    // inline pointer format instead. userTurnCount counts the message we're
+    // about to send.
+    const userTurnCountForRequest = messages.filter((m) => m.role === "user")
+      .length + 1;
+    const suppressPills = userTurnCountForRequest > 1;
+
     const userMessage: Message = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage]);
     setIsStreaming(true);
     setIsThinking(true);
     setFollowups([]);
+    // One-shot scroll so the user sees their question and the thinking
+    // indicator. The view then stays put through streaming.
+    requestAnimationFrame(() => scrollToBottom());
 
     try {
       const history = messages.map((m) => ({
@@ -87,7 +114,7 @@ export default function ChatPage() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history }),
+        body: JSON.stringify({ message: text, history, suppressPills }),
       });
 
       if (!response.ok) throw new Error("Failed to get response");
@@ -150,28 +177,35 @@ export default function ChatPage() {
         }
       }
 
-      // Use curated followups for the opening funnel, otherwise
-      // fall back to Claude's contextual <followups>.
+      // Decide which pills (if any) to show below this answer.
+      //   - Turn 1 → full pill row (curated openers or the model's <followups>).
+      //   - Turn 2+ → no pills, except a dead-end "recovery" set when the
+      //     model produced no useful content. The model is using the inline
+      //     pointer format instead.
+      //   - Grass pill is layered on top whenever its threshold is met,
+      //     even if no other pills are present.
+      const isDeadEnd = !fullText.trim() && !projectRows;
+      const userTurnCount = userTurnCountForRequest;
+
       let newFollowups: string[] = [];
-      const curated = getCuratedFollowups(text);
-      if (curated) {
-        newFollowups = curated;
-      } else if (followupsMatch) {
-        try {
-          const parsed = JSON.parse(followupsMatch[1]);
-          if (Array.isArray(parsed)) newFollowups = parsed;
-        } catch {
-          // Malformed JSON — skip
+      if (!suppressPills) {
+        const curated = getCuratedFollowups(text);
+        if (curated) {
+          newFollowups = curated;
+        } else if (followupsMatch) {
+          try {
+            const parsed = JSON.parse(followupsMatch[1]);
+            if (Array.isArray(parsed)) newFollowups = parsed;
+          } catch {
+            // Malformed JSON — skip
+          }
         }
+      } else if (isDeadEnd) {
+        newFollowups = [...RECOVERY_PILLS];
       }
 
-      // Inject the "touch grass" pill after enough turns (once only)
-      const userTurnCount = messages.filter((m) => m.role === "user").length + 1;
-      if (
-        userTurnCount >= GRASS_TURN_THRESHOLD &&
-        !grassUsed &&
-        newFollowups.length > 0
-      ) {
+      // Grass pill — appears standalone once the threshold is met.
+      if (userTurnCount >= GRASS_TURN_THRESHOLD && !grassUsed) {
         newFollowups = [...newFollowups, GRASS_PILL];
       }
       setFollowups(newFollowups);
@@ -336,6 +370,24 @@ function LandingLayout({ onSend }: { onSend: (text: string) => void }) {
   );
 }
 
+function ChevronDownIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
 function ConversationLayout({
   messages,
   isThinking,
@@ -353,10 +405,43 @@ function ConversationLayout({
 }) {
   const showFollowups = followups.length > 0 && !isStreaming && !isThinking;
 
+  // Floating ↓ button: appears when the user is scrolled away from the
+  // bottom of the transcript. Lets them jump to the latest content
+  // without auto-scrolling them while they're still reading.
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  const recomputeScrollState = useCallback(() => {
+    const el = transcriptRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    // 80px threshold so tiny rounding differences don't flicker the button
+    setShowScrollDown(distance > 80);
+  }, []);
+
+  // Scroll listener
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", recomputeScrollState, { passive: true });
+    return () => el.removeEventListener("scroll", recomputeScrollState);
+  }, [recomputeScrollState]);
+
+  // Recompute when content grows (streaming, new messages, thinking
+  // indicator) — the listener only fires on actual scroll events, not
+  // on container size changes.
+  useEffect(() => {
+    recomputeScrollState();
+  }, [messages, isThinking, recomputeScrollState]);
+
+  const handleScrollDown = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <main className="relative z-10 flex-1 flex flex-col pt-28">
       {/* Scrollable transcript */}
-      <div className="flex-1 overflow-y-auto chat-scroll">
+      <div ref={transcriptRef} className="flex-1 overflow-y-auto chat-scroll">
         <div className="max-w-[680px] mx-auto px-6 pb-8 flex flex-col gap-6">
           {messages.map((msg, i) => (
             <MessageBubble
@@ -379,7 +464,19 @@ function ConversationLayout({
       </div>
 
       {/* Docked input */}
-      <div className="shrink-0 px-6 pb-4 pt-2 flex flex-col items-center">
+      <div className="shrink-0 px-6 pb-4 pt-2 flex flex-col items-center relative">
+        {/* Floating "scroll to latest" button — sits just above the dock,
+            visible only when the user has scrolled away from the bottom. */}
+        {showScrollDown && (
+          <button
+            type="button"
+            onClick={handleScrollDown}
+            className="absolute -top-12 left-1/2 -translate-x-1/2 z-20 w-9 h-9 flex items-center justify-center rounded-full bg-white/90 border border-[rgba(31,27,22,0.1)] shadow-[0_2px_10px_rgba(0,0,0,0.08)] backdrop-blur-sm text-[rgba(31,27,22,0.55)] hover:text-[#1f1b16] hover:bg-white transition-colors cursor-pointer"
+            aria-label="Scroll to latest message"
+          >
+            <ChevronDownIcon />
+          </button>
+        )}
         <div className="w-full max-w-[680px]">
           {showFollowups && (
             <FollowUpPills prompts={followups} onSelect={onSend} />

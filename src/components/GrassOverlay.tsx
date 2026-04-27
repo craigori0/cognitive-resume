@@ -8,9 +8,9 @@ import { parseSSEStream } from "@/lib/sse";
 import type { Message } from "@/lib/types";
 
 const GRASS_PROMPTS = [
-  "What are your top 5 albums?",
-  "Best cookies in NYC?",
-  "Most beautiful places you\u2019ve seen?",
+  "What kind of music are you into?",
+  "Do you like to travel?",
+  "What do you do for fun?",
 ];
 
 interface GrassOverlayProps {
@@ -71,17 +71,24 @@ export default function GrassOverlay({ onClose, mainHistory }: GrassOverlayProps
     setInputValue("");
 
     try {
-      // Include main chat history for context continuity
-      const grassHistory = messages
-        .filter((m) => m.content) // skip empty
-        .map((m) => ({ role: m.role, content: m.content }));
+      // Include main chat history for context continuity. CRITICAL: strip
+      // both mainHistory and grassHistory down to {role, content} only —
+      // Message has optional fields (projectRows, projectTableDefaultView,
+      // showPortfolioPointer) that the Anthropic SDK rejects when forwarded
+      // to its messages.stream() call. Without this, every grass-mode turn
+      // after the main chat has had any assistant turn fails silently into
+      // the catch block.
+      const cleanHistory = (msgs: Message[]) =>
+        msgs
+          .filter((m) => m.content)
+          .map((m) => ({ role: m.role, content: m.content }));
 
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          history: [...mainHistory.slice(-8), ...grassHistory],
+          history: [...cleanHistory(mainHistory).slice(-8), ...cleanHistory(messages)],
           grassMode: true,
         }),
       });

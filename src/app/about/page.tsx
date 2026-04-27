@@ -147,21 +147,20 @@ export default function AboutPage() {
 
           <p className="mt-6 text-[17px] leading-[1.65] text-[rgba(31,27,22,0.6)]">
             For 11 years at frog I&apos;ve led multi-disciplinary teams through
-            high-stakes product and innovation challenges for Fortune 500
-            companies across healthcare, fintech, food delivery, and government.
-            Over the past year, the AI boom has shifted my role significantly
-            — I&apos;m now working almost exclusively on AI product design, with
-            a focus on cognitive and agentic systems. That&apos;s required me
-            to step back into a player-coach mode: leading creative exploration
-            with the new mediums while still fulfilling senior management
-            duties.
+            high-stakes product innovation challenges for Fortune 500 companies
+            across a wide range of industries. Over the past year, my role has
+            shifted to working almost exclusively on AI product design, with a
+            focus on cognitive and agentic systems. That&apos;s required me to
+            step back into a player-coach mode: leading creative exploration
+            with the new mediums while still fulfilling senior management duties.
           </p>
 
           <p className="mt-6 text-[17px] leading-[1.65] text-[rgba(31,27,22,0.6)]">
-            My core thesis is that cognitive systems — software that maintains
-            structured knowledge and reasons over it — will drive the next
-            wave of product innovation. This RAG Resume is itself a cognitive
-            system, designed to demonstrate that thesis firsthand.
+            My core thesis is that cognitive systems (i.e. the systems of
+            structured knowledge, data, and reasoning frameworks that enable
+            high quality agentic experiences) will drive the next wave of
+            growth and product innovation. This RAG Resume is itself a
+            cognitive system, designed to demonstrate that thesis firsthand.
           </p>
         </section>
 
@@ -170,15 +169,19 @@ export default function AboutPage() {
           <h2 className={SECTION_LABEL}>What I&apos;m looking for next</h2>
           <div className="mt-5 space-y-5">
             <p className="text-[17px] leading-[1.65] text-[rgba(31,27,22,0.6)]">
-              I&apos;m focused on designing and building AI products that
-              improve the human experience. I want a player-coach role where I
-              can be hands-on with exploration, design, and build — with a
-              special focus on cognitive and agentic systems — while still
-              leveraging 12 years of strategic leadership experience to lead
+              I am looking for a role where I can design AI systems that
+              amplify human agency and improve the human experience.
+            </p>
+            <p className="text-[17px] leading-[1.65] text-[rgba(31,27,22,0.6)]">
+              I believe all leaders need to be hands on with the new AI
+              mediums and tools in order to effectively drive teams and create
+              value. I am aiming to find a player-coach role where I can get
+              hands on as a full-stack AI product builder while still
+              leveraging 12+ years of strategic leadership experience to lead
               teams when necessary.
             </p>
             <p className="text-[17px] leading-[1.65] text-[rgba(31,27,22,0.6)]">
-              I&apos;m open to both principal and director roles, as long as
+              I&apos;m seeking both principal and director roles, as long as
               they empower building alongside leadership.
             </p>
           </div>
